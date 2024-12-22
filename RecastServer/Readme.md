@@ -2,6 +2,11 @@
 
 This project is a HTTP webservice that can build navigation meshes for constructs, and answer path queries in it.
 
+
+
+https://github.com/user-attachments/assets/945a5988-86bf-4616-a950-508c0fa88011
+
+
 ## Running
 
     ./RecastServer

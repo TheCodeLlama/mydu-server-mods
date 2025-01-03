@@ -513,6 +513,75 @@ public class RecastBuilder
         Console.WriteLine($"MAX {maxf} COUNT {geom.vertices.Length/3}");
         geom.Replace(averts, afaces);
     }
+    public List<Vector2> LinesAt(float[] vertices, int[] faces, float z)
+    {
+        var res = new List<Vector2>();
+        for (int i=0; i<faces.Length; i+=3)
+        {
+            int fa = faces[i];
+            var a = new Vector3(vertices[fa*3], vertices[fa*3+1], vertices[fa*3+2]);
+            fa = faces[i+1];
+            var b = new Vector3(vertices[fa*3], vertices[fa*3+1], vertices[fa*3+2]);
+            fa = faces[i+2];
+            var c = new Vector3(vertices[fa*3], vertices[fa*3+1], vertices[fa*3+2]);
+            int nlow = 0;
+            int nup = 0;
+            if (a.Z > z) nup++; else nlow++;
+            if (b.Z > z) nup++; else nlow++;
+            if (c.Z > z) nup++; else nlow++;
+            if (nlow == 0 || nup == 0)
+                continue;
+            Vector3[] fs = [a, b, c];
+            for (int k=0; k<3; k++)
+            {
+                Vector3 fu = fs[k];
+                Vector3 fv = fs[(k+1)%3];
+                float magic = (fu.Z-z)*(fv.Z-z);
+                if (magic > 0)
+                    continue;
+                var t = (z - fu.Z) / (fv.Z - fu.Z);
+                var xi = fu.X + t*(fv.X-fu.X);
+                var yi = fu.Y + t*(fv.Y-fu.Y);
+                res.Add(new Vector2(xi, yi));
+            }
+        }
+        return res;
+    }
+    public string ToSGVG(List<Vector2> segments)
+    {
+        var svgBuilder = new StringBuilder();
+        float maxx = 0;
+        float maxy = 0;
+        foreach (var p in segments)
+        {
+            maxx = Math.Max(maxx, p.X);
+            maxy = Math.Max(maxy, p.Y);
+        }
+
+        // SVG Header
+        svgBuilder.AppendLine($"<svg id=\"minimap\" xmlns=\"http://www.w3.org/2000/svg\" width=\"{(int)Math.Ceiling(maxx*10.0)+5}\" height=\"{(int)Math.Ceiling(maxy*10.0)+5}\">");
+
+        // Add each line segment as an SVG line element
+        for(int i=0; i<segments.Count; i+=2)
+        {
+            var a = segments[i];
+            var b = segments[i+1];
+            svgBuilder.AppendLine($"  <line x1=\"{a.X*10.0}\" y1=\"{a.Y*10.0}\" x2=\"{b.X*10.0}\" y2=\"{b.Y*10.0}\" stroke=\"black\" stroke-width=\"2\" />");
+        }
+
+        // SVG Footer
+        svgBuilder.AppendLine("</svg>");
+
+        return svgBuilder.ToString();
+    }
+    public string MakSVG(string gltf, float z)
+    {
+         var model = SharpGLTF.Schema2.ModelRoot.Load(gltf);
+        model.SaveAsWavefront("/tmp/temp-obj.obj");
+        var geomProvider = FixInputGeomProvider.LoadFile("/tmp/temp-obj.obj");
+        var lines = LinesAt(geomProvider.vertices, geomProvider.faces, z);
+        return ToSGVG(lines);
+    }
      public DtNavMesh Build(string gltf, DtoElements elems, Dictionary<ulong, DtoBox> boxes, DtoBuildOptions options)
     {
          var model = SharpGLTF.Schema2.ModelRoot.Load(gltf);
@@ -637,6 +706,13 @@ public class Storage
         }
         ByConstruct[cid] = (new RecastBuilder()).Build(name, elems, boxt, options);
     }
+    public static async Task<string> MapAt(HttpClient client, ulong cid, float z)
+    {
+        var payload = await client.GetRaw($"{VoxelBase}/public/voxels/constructs/{cid}/mesh.glb");
+        var name = $"/tmp/mesh-{cid}.glb";
+        System.IO.File.WriteAllBytes(name, payload.ToArray());
+        return (new RecastBuilder()).MakSVG(name, z);
+    }
 }
  public static class HTTPClientExtensions
     {
@@ -730,7 +806,7 @@ public class NavigationController : ControllerBase
         status = q.FindPath(pOrigin, pDestination, vStart,vEnd, new DtQueryDefaultFilter(),ref resultPath, DtFindPathOption.NoOption);
         if (!status.Succeeded())
             throw new Exception("no path");
-        var lines = new DtStraightPath[10];
+        var lines = new DtStraightPath[50];
         status = q.FindStraightPath(vStart, vEnd, resultPath, resultPath.Count, lines, out var lCount, 50, 0);
         if (!status.Succeeded())
             throw new Exception("no lines");
@@ -738,5 +814,11 @@ public class NavigationController : ControllerBase
         for (var i=0; i<lCount; i++)
             res.Add(new List<float>{lines[i].pos.X, lines[i].pos.Z, lines[i].pos.Y});
         return Ok(res);
+    }
+    [HttpPost]
+    [Route("map/{id}/{z}")]
+    public async Task<IActionResult> Map(ulong id, float z)
+    {
+        return Ok(await Storage.MapAt(Client, id, z));
     }
 }

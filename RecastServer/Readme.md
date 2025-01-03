@@ -1,6 +1,6 @@
 # Navigation mesh construction and query webservice
 
-This project is a HTTP webservice that can build navigation meshes for constructs, and answer path queries in it.
+This project is a HTTP webservice that can build navigation meshes for constructs, and answer path queries in it. Additionally it can produce 2d maps of a construct's insides.
 
 
 
@@ -39,6 +39,9 @@ Returns an array of 3-float arrays: the straight line segments path to follow to
 
 If the nav mesh was not previously built, build it, ignoring all elements.
 
+### POST /navigation/map/{constructId}/{height}
+
+Slice the mesh at height "height" and returns a SVG with line segments, scaled by 10 (1 unit = 10cm).
 
 # Sample Mod code
 

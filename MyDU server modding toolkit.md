@@ -14,7 +14,7 @@ They have the capability to inject contextual entries to the client’s popup me
 
 ## Getting started
 
-Download the mod toolkit archive and run “dotnet build” in the “ModAdmin” directory which contains a sample mod.
+Download the mod toolkit archive and run “dotnet build” in the “SampleDllMod” directory which contains a sample mod.
 
 Copy the generated ModAdmin.dll in the Mods directory at the root of the mydu server install directory.
 
